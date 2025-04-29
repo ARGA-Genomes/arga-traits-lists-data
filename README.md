@@ -102,13 +102,13 @@ function testPush() {
 - Save the script.
 #### 3. Set the **Script Property** for GitHub token
 In Apps Script editor:
-- Go to ```**Project Settings > Script Properties**```.
+- Go to ```Project Settings > Script Properties```.
 - Add a new property:
   - Key: ```GITHUB_TOKEN```
   - Value: (_your GitHub classic token_)
 #### 4. Reload your sheet
 - Refresh the Sheet (```Cmd+R``` or ```Ctrl+R```).
-- The custom menu ```**ARGA Tools > Push current sheet to ARGA GitHub**``` should now appear.
+- The custom menu ```ARGA Tools > Push current sheet to ARGA GitHub``` should now appear.
 ### Deployment tips
 | **Tip** | **Why** |
 | :---   | :--- |
@@ -118,7 +118,7 @@ In Apps Script editor:
 | Check GitHub after push | Confirm your CSV file is live |
 ## Quick recovery steps
 1. Reload your Google Sheet.
-2. Check ```**Script Properties**``` for your GitHub token.
+2. Check ```Script Properties``` for your GitHub token.
 3. Check GitHub — if no file appears, simply re-push.
 ### Notes
 - Every push creates a **new versioned file** — no overwrites unless filename is identical.
