@@ -29,3 +29,22 @@ jobs:
             echo "==== $file ===="
             head -n 10 "$file"
           done < changed_csvs.txt
+
+      - name: Request ALA access token
+        id: get_token
+        run: |
+          RESPONSE=$(curl -s -u "${{ secrets.ALA_CLIENT_ID }}:${{ secrets.ALA_CLIENT_SECRET }}" \
+            -X POST \
+            -d "grant_type=client_credentials" \
+            -d "scope=ala/attrs ala/internal users/read" \
+            "https://auth-secure.auth.ap-southeast-2.amazoncognito.com/oauth2/token")
+
+          echo "$RESPONSE" | jq
+          ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r .access_token)
+
+          if [ "$ACCESS_TOKEN" == "null" ]; then
+            echo "❌ Failed to get access token"
+            exit 1
+          fi
+
+          echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
