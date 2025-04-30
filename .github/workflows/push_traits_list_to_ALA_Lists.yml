@@ -40,4 +40,4 @@ jobs:
           curl -s -X POST "https://lists-ws.test.ala.org.au/graphql" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -d '{"query":"query { ping }"}'
+            -d '{"query":"query { lists { id name } }"}'
