@@ -13,6 +13,19 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        
+      - name: Get list of changed CSV files
+        id: get_files
+        run: |
+          echo "Listing CSV files changed in this push:"
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
+            | grep '^imported_GoogleSheets/.*\.csv$' || true > changed_csvs.txt
 
-      - name: Show file that triggered this
-        run: echo "CSV file pushed — ready to trigger the ALA upload pipeline."
+          cat changed_csvs.txt
+
+      - name: Loop through and print contents
+        run: |
+          while IFS= read -r file; do
+            echo "==== $file ===="
+            head -n 10 "$file"
+          done < changed_csvs.txt
