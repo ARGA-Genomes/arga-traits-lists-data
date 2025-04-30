@@ -35,3 +35,9 @@ jobs:
           echo "Using static ALA access token for testing."
           echo "ACCESS_TOKEN=${{ secrets.ALA_ACCESS_TOKEN }}" >> $GITHUB_ENV
       
+      - name: Send test GraphQL mutation to ALA Lists
+        run: |
+          curl -s -X POST "https://lists-ws.test.ala.org.au/graphql" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -d '{"query":"query { ping }"}'
