@@ -19,7 +19,7 @@ jobs:
       - name: Replace list using GraphQL
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-          LIST_ID: "68130d9668ab293a5a946d68"
+          LIST_ID: "67b51f358a0f582bd7ef9d73"
         run: |
           node <<'EOF'
           const fs = require('fs');
