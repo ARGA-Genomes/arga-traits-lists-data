@@ -18,7 +18,7 @@ The ALA Lists version results from indexation of the original file against the A
 
 The newly parsed version of the file is registered under:
 
-**ListID:** `681363e168ab293a5a947908`
+>**ListID:** `681363e168ab293a5a947908`
 
 That file is ingested into the database underlying the ARGA index via the ALA List tool API service.
 
@@ -27,7 +27,7 @@ That file is ingested into the database underlying the ARGA index via the ALA Li
 Older versions of this list are archived here and synced to our complementary OSF repository accessible at:
 _ARGA Curated Data/ARGA: Edible Species metalist_ (https://osf.io/7egt9/).
 
-**Citation:**  Connolly, K. & Hall, K.A. 2025. _ARGA: Edible Species metalist._ OSF. doi:10.17605/OSF.IO/7EGT9.
+>**Citation:**  Connolly, K. & Hall, K.A. 2025. _ARGA: Edible Species metalist._ OSF. doi:10.17605/OSF.IO/7EGT9.
 
 The list is maintained and updated by the ARGA research team, and currently draws primarily from:
 
