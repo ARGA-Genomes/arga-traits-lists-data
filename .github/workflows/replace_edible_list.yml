@@ -32,7 +32,16 @@ jobs:
           const api = "https://lists-ws.test.ala.org.au/graphql";
 
           const fileDir = './imported_GoogleSheets';
-          const filePath = path.join(fileDir, fs.readdirSync(fileDir).filter(f => f.endsWith('.csv')).sort().reverse()[0]);
+          const files = fs.readdirSync(fileDir)
+          .filter(f => f.endsWith('.csv'))
+          .map(f => ({
+            name: f,
+            time: fs.statSync(path.join(fileDir, f)).mtime.getTime()
+          }))
+          .sort((a, b) => b.time - a.time);
+
+          const filePath = path.join(fileDir, files[0].name);
+          console.log(`📄 Using file: ${files[0].name}`);
 
           const headers = {
             'Content-Type': 'application/json',
