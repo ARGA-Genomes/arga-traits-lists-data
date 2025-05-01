@@ -31,18 +31,18 @@ jobs:
           const token = process.env.ACCESS_TOKEN;
           const listId = process.env.LIST_ID;
           const apiBase = "https://lists-ws.test.ala.org.au";
+          
+          async function uploadFile() {
+            const form = new FormData();
+            form.append('file', fs.createReadStream(filePath));
 
-async function uploadFile() {
-  const form = new FormData();
-  form.append('file', fs.createReadStream(filePath));
+            const headers = {
+            ...form.getHeaders(),
+            Authorization: `Bearer ${token}`
+            };
 
-  const headers = {
-    ...form.getHeaders(),
-    Authorization: `Bearer ${token}`
-  };
-
-  const res = await axios.post(`${apiBase}/upload`, form, { headers });
-  console.log("🔎 Upload response:", res.data);
+          const res = await axios.post(`${apiBase}/upload`, form, { headers });
+          console.log("🔎 Upload response:", res.data);
 
   // Flexible handling: support either file: "string" or file: { name: "string" }
   const fileHandle = typeof res.data.file === 'string' ? res.data.file : res.data.file?.name;
@@ -50,7 +50,7 @@ async function uploadFile() {
   return fileHandle;
 }
 
-async function ingestFile(fileHandle) {
+  async function ingestFile(fileHandle) {
   const form = new FormData();
   form.append('file', fileHandle);
 
