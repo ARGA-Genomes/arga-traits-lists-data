@@ -1,43 +1,98 @@
-name: Push CSV to ALA Lists
+name: Replace ALA List from Google Sheets CSV
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'imported_GoogleSheets/*.csv'  # triggers only when CSV files are changed
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
-  build:
+  replace-list:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        
-      - name: Get list of changed CSV files
-        id: get_files
-        run: |
-          echo "Listing CSV files changed in this push:"
-          git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
-            | grep '^imported_GoogleSheets/.*\.csv$' || true > changed_csvs.txt
 
-          cat changed_csvs.txt
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-      - name: Loop through and print contents
-        run: |
-          while IFS= read -r file; do
-            echo "==== $file ===="
-            head -n 10 "$file"
-          done < changed_csvs.txt
+      - name: Install dependencies
+        run: npm install axios csv-parser
 
-      - name: Load test ALA token
+      - name: Replace list content
+        env:
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          LIST_ID: "67bbbd07a9349d409385d6de"
         run: |
-          echo "Using static ALA access token for testing."
-          echo "ACCESS_TOKEN=${{ secrets.ALA_ACCESS_TOKEN }}" >> $GITHUB_ENV
-      
-      - name: Send test GraphQL mutation to ALA Lists
-        run: |
-          curl -s -X POST "https://lists-ws.test.ala.org.au/graphql" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -d '{"query":"mutation create($createItem: InputSpeciesListItem) { newItem: addSpeciesListItem(inputSpeciesListItem: $createItem) { id scientificName } }","variables":{"createItem":{"speciesListID":"67bbbd07a9349d409385d6de","scientificName":"Zebrasoma scopas"}}}'
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const axios = require('axios');
+          const csv = require('csv-parser');
+
+          const listId = process.env.LIST_ID;
+          const token = process.env.ACCESS_TOKEN;
+          const api = "https://lists-ws.test.ala.org.au/graphql";
+          const filePath = fs.readdirSync('./imported_GoogleSheets')
+                             .filter(f => f.endsWith('.csv'))
+                             .sort()
+                             .reverse()[0];  // Most recent file
+
+          const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          };
+
+          async function getItemIds() {
+            const query = `query {
+              list: filterSpeciesList(speciesListID: "${listId}") {
+                content { id }
+              }
+            }`;
+            const res = await axios.post(api, { query }, { headers });
+            return res.data.data.list.content.map(item => item.id);
+          }
+
+          async function deleteItem(id) {
+            const mutation = `mutation { removeSpeciesListItem(id: "${id}") { id } }`;
+            return axios.post(api, { query: mutation }, { headers });
+          }
+
+          async function addItem(name) {
+            const mutation = `mutation {
+              newItem: addSpeciesListItem(inputSpeciesListItem: {
+                speciesListID: "${listId}",
+                scientificName: "${name}"
+              }) { id scientificName }
+            }`;
+            return axios.post(api, { query: mutation }, { headers });
+          }
+
+          (async () => {
+            console.log("🧹 Deleting existing records...");
+            const ids = await getItemIds();
+            for (const id of ids) {
+              await deleteItem(id);
+              console.log(`🗑️ Deleted ${id}`);
+            }
+
+            console.log("📥 Re-inserting from:", filePath);
+            const stream = fs.createReadStream(path.join('./imported_GoogleSheets', filePath));
+            let count = 0;
+            stream.pipe(csv())
+              .on('data', async (row) => {
+                const name = row.scientificName;
+                if (name && name.trim()) {
+                  try {
+                    const res = await addItem(name.trim());
+                    console.log(`✅ Added: ${name}`);
+                  } catch (e) {
+                    console.log(`❌ Failed to add: ${name}`, e.response?.data || e.message);
+                  }
+                  count++;
+                }
+              })
+              .on('end', () => {
+                console.log(`🎉 Done. Added ${count} records.`);
+              });
+          })();
+          EOF
