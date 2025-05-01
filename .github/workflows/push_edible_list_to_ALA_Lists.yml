@@ -1,4 +1,4 @@
-name: Replace Venomous List in ALA Lists
+name: Replace Edible Test List in ALA Lists
 
 on:
   workflow_dispatch:
