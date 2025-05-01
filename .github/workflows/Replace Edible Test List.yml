@@ -1,0 +1,80 @@
+name: Replace Edible Test List in ALA Lists
+
+on:
+  workflow_dispatch:
+
+jobs:
+  replace-list:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install Node.js dependencies
+        run: npm install axios form-data
+
+      - name: Replace species list via upload + ingest
+        env:
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          LIST_ID: "68130d9668ab293a5a946d68"
+        run: |
+          node <<'EOF'
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
+const FormData = require('form-data');
+
+const fileDir = './imported_GoogleSheets';
+const fileName = fs.readdirSync(fileDir).filter(f => f.endsWith('.csv')).sort().reverse()[0];
+const filePath = path.join(fileDir, fileName);
+
+const token = process.env.ACCESS_TOKEN;
+const listId = process.env.LIST_ID;
+const apiBase = "https://lists-ws.test.ala.org.au";
+
+async function uploadFile() {
+  const form = new FormData();
+  form.append('file', fs.createReadStream(filePath));
+
+  const headers = {
+    ...form.getHeaders(),
+    Authorization: `Bearer ${token}`
+  };
+
+  const res = await axios.post(`${apiBase}/upload`, form, { headers });
+  console.log("🔎 Upload response:", res.data);
+
+  // Flexible handling: support either file: "string" or file: { name: "string" }
+  const fileHandle = typeof res.data.file === 'string' ? res.data.file : res.data.file?.name;
+  if (!fileHandle) throw new Error("No file handle returned from upload.");
+  return fileHandle;
+}
+
+async function ingestFile(fileHandle) {
+  const form = new FormData();
+  form.append('file', fileHandle);
+
+  const headers = {
+    ...form.getHeaders(),
+    Authorization: `Bearer ${token}`
+  };
+
+  const res = await axios.post(`${apiBase}/ingest/${listId}`, form, { headers });
+  return res.data;
+}
+
+(async () => {
+  try {
+    console.log("📤 Uploading CSV...");
+    const handle = await uploadFile();
+    console.log(`✅ File uploaded. Handle: ${handle}`);
+
+    console.log("🚀 Ingesting to replace list...");
+    const ingestResult = await ingestFile(handle);
+    console.log("🎉 Ingested:", ingestResult);
+  } catch (err) {
+    console.error("❌ Error:", err.response?.data || err.message);
+    process.exit(1);
+  }
+})();
+EOF
