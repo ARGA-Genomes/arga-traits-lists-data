@@ -14,19 +14,19 @@ The ALA Lists version results from indexation of the original file against the A
 - match type,
 - match rank.
 
-Note: the original `scientificName` column is renamed in ALA’s UI to **Supplied Name**.
+**Note:** the original `scientificName` column is renamed in ALA’s UI to ```Supplied Name```.
 
 The newly parsed version of the file is registered under:
 **ListID:** `681363e168ab293a5a947908`
 
 That file is ingested into the database underlying the ARGA index via the ALA List tool API service.
 
-#### Versioning
+### Versioning
 
 Older versions of this list are archived here and synced to our complementary OSF repository accessible at:
-ARGA Curated Data/ARGA: Edible Species metalist (https://osf.io/7egt9/).
+_ARGA Curated Data/ARGA: Edible Species metalist_ (https://osf.io/7egt9/).
 
-Citation:  Connolly, K. & Hall, K.A. 2025. ARGA: Edible Species metalist. OSF. doi:10.17605/OSF.IO/7EGT9.
+**Citation:**  Connolly, K. & Hall, K.A. 2025. _ARGA: Edible Species metalist._ OSF. doi:10.17605/OSF.IO/7EGT9.
 
 The list is maintained and updated by the ARGA research team, and currently draws primarily from:
 
@@ -38,14 +38,14 @@ The list is maintained and updated by the ARGA research team, and currently draw
 - First created: **1 June 2023**  
 - Last updated: **1 May 2025**
 
-The primary source file is maintained as a private Google Sheet and synced to this repository in a versioned format via an automated Google Apps Script workflow.
+The primary source file is maintained as a private Google Sheet and synced to this repository in a versioned format via an automated Google Apps Script workflow.   A copy of this file is archived in the OSF repository.
 
-#### Field Definitions
+### Field Definitions
 
 | **Field**                  | **Description**                                                                        | **Category**  |
 |---------------------------|------------------------------------------------------------------------------------------|---------------|
-| `scientificName`          | Name of the taxon as supplied to the ALA name indexing service (without authority)      | Required      |
-| `canonicalName_curated`   | Curated canonical form of the scientific name (without authority)                       | Required      |
+| `scientificName`          | Name of the taxon as supplied to the ALA name indexing service (without Authority)      | Required      |
+| `canonicalName_curated`   | Curated canonical form of the scientific name (without Authority)                       | Required      |
 | `rank_verbatim`           | Raw taxonomic rank from source dataset                                                  | Optional      |
 | `verbatimName`            | Original name string prior to curation and processing                                   | Optional      |
 | `vernacularName_fromSource` | Common name(s) from source                                                           | Optional      |
@@ -60,12 +60,12 @@ The primary source file is maintained as a private Google Sheet and synced to th
 | `FSANZFoodID`             | FSANZ food code, if applicable                                                          | Optional      |
 | `GRINGlobalNomenNumber`   | GRIN reference number, if applicable                                                    | Optional      |
 | `ausNativeFood`           | Flag for known usage as an Indigenous food status in Australia (TRUE/FALSE)             | Optional      |
-| `foodType`                | Type or part of plant used (e.g., leaf, fruit)                                          | Optional      |
+| `foodType`                | Type or part of plant used (_e.g._, leaf, fruit)                                          | Optional      |
 | `recordCurator`           | Person or team who curated the record                                                   | Required      |
-| `recordCuratorID`         | Identifier for curator (e.g., ORCID: https://orcid.org/0000-0002-8785-4513)             | Optional      |
+| `recordCuratorID`         | Identifier for curator (_e.g._, ORCID: https://orcid.org/0000-0002-8785-4513)             | Optional      |
 | `recordRightsHolder`      | Rights holder listed at record level                                                    | Required      |
 | `recordAccessRights`      | Human-readable usage rights                                                             | Optional      |
-| `recordType`              | Format of record (e.g., text)                                                           | Optional      |
+| `recordType`              | Format of record (_e.g._, text)                                                           | Optional      |
 | `recordLanguage`          | ISO language code for the record content                                                | Optional      |
 | `recordLicense`           | Licence assigned specifically to the whole curated record                               | Required      |
 | `recordBibliographicCitation` | Full formal citation for the curated record, including ARGA attribution           | Required      |
