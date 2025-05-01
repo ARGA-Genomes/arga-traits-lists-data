@@ -1,3 +1,21 @@
+name: Replace list using GraphQL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  graphql-replace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Init Node project
+        run: npm init -y
+
+      - name: Install dependencies
+        run: npm install axios csv-parser
+
       - name: Replace list using GraphQL
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
