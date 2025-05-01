@@ -19,7 +19,7 @@ jobs:
       - name: Replace list using GraphQL
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-          LIST_ID: "67b51f358a0f582bd7ef9d73"
+          LIST_ID: "681363e168ab293a5a947908"
         run: |
           node <<'EOF'
           const fs = require('fs');
@@ -31,7 +31,7 @@ jobs:
           const token = process.env.ACCESS_TOKEN;
           const api = "https://lists-ws.test.ala.org.au/graphql";
 
-          const fileDir = './exported_GoogleSheets';
+          const fileDir = './imported_GoogleSheets';
           const filePath = path.join(fileDir, fs.readdirSync(fileDir).filter(f => f.endsWith('.csv')).sort().reverse()[0]);
 
           const headers = {
