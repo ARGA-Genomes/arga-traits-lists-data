@@ -1,4 +1,4 @@
-name: Replace list using GraphQL
+name: Replace Edible species list in ALA using GraphQL
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
           const token = process.env.ACCESS_TOKEN;
           const api = "https://lists-ws.test.ala.org.au/graphql";
 
-          const fileDir = './imported_GoogleSheets';
+          const fileDir = './imported_GoogleSheets/Edible_species_list';
           const prefix = process.env.LIST_PREFIX;
 
           const fileMatch = fs.readdirSync(fileDir)
