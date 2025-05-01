@@ -44,7 +44,7 @@ jobs:
 
           async function getItemIds() {
             const query = `query {
-              list: filterSpeciesList(speciesListID: "${listId}") {
+              list: filterSpeciesList(speciesListID: "${specieslistId}") {
                 content { id }
               }
             }`;
@@ -60,7 +60,7 @@ jobs:
           async function addItem(name) {
             const mutation = `mutation {
               newItem: addSpeciesListItem(inputSpeciesListItem: {
-                speciesListID: "${listId}",
+                speciesListID: "${specieslistId}",
                 scientificName: "${name}"
               }) { id scientificName }
             }`;
