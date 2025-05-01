@@ -24,7 +24,7 @@ jobs:
           const axios = require('axios');
           const FormData = require('form-data');
 
-          const fileDir = './imported_GoogleSheets';
+          const fileDir = './exported_GoogleSheets';
           const fileName = fs.readdirSync(fileDir).filter(f => f.endsWith('.csv')).sort().reverse()[0];
           const filePath = path.join(fileDir, fileName);
 
