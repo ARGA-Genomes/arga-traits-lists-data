@@ -16,7 +16,7 @@ jobs:
       - name: Replace species list via upload + ingest
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-          LIST_ID: "67bbbd07a9349d409385d6de"
+          LIST_ID: "68130d9668ab293a5a946d68"
         run: |
           node <<'EOF'
           const fs = require('fs');
