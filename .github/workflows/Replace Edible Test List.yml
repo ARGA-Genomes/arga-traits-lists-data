@@ -1,10 +1,10 @@
-name: Replace Edible Test List in ALA Lists
+name: Replace Species List via GraphQL
 
 on:
   workflow_dispatch:
 
 jobs:
-  replace-list:
+  graphql-replace:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -14,9 +14,9 @@ jobs:
         run: npm init -y
 
       - name: Install dependencies
-        run: npm install axios form-data
+        run: npm install axios csv-parser
 
-      - name: Replace species list via upload + ingest
+      - name: Replace list using GraphQL
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           LIST_ID: "68130d9668ab293a5a946d68"
@@ -25,59 +25,90 @@ jobs:
           const fs = require('fs');
           const path = require('path');
           const axios = require('axios');
-          const FormData = require('form-data');
+          const csv = require('csv-parser');
 
-          const fileDir = './imported_GoogleSheets';
-          const fileName = fs.readdirSync(fileDir).filter(f => f.endsWith('.csv')).sort().reverse()[0];
-          const filePath = path.join(fileDir, fileName);
-
-          const token = process.env.ACCESS_TOKEN;
           const listId = process.env.LIST_ID;
-          const apiBase = "https://lists-ws.test.ala.org.au";
-          
-          async function uploadFile() {
-            const form = new FormData();
-            form.append('file', fs.createReadStream(filePath));
+          const token = process.env.ACCESS_TOKEN;
+          const api = "https://lists-ws.test.ala.org.au/graphql";
 
-            const headers = {
-            ...form.getHeaders(),
-            Authorization: `Bearer ${token}`
-            };
-
-          const res = await axios.post(`${apiBase}/upload`, form, { headers });
-          console.log("🔎 Upload response:", res.data);
-
-          // Flexible handling: support either file: "string" or file: { name: "string" }
-          const fileHandle = typeof res.data.file === 'string' ? res.data.file : res.data.file?.name;
-          if (!fileHandle) throw new Error("No file handle returned from upload.");
-          return fileHandle;
-          }
-
-          async function ingestFile(fileHandle) {
-          const form = new FormData();
-          form.append('file', fileHandle);
+          const fileDir = './exported_GoogleSheets';
+          const filePath = path.join(fileDir, fs.readdirSync(fileDir).filter(f => f.endsWith('.csv')).sort().reverse()[0]);
 
           const headers = {
-          ...form.getHeaders(),
-          Authorization: `Bearer ${token}`
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           };
 
-          const res = await axios.post(`${apiBase}/ingest/${listId}`, form, { headers });
-          return res.data;
+          async function getItemIds() {
+            const query = `query {
+              list: filterSpeciesList(speciesListID: "${listId}") {
+                content { id }
+              }
+            }`;
+            const res = await axios.post(api, { query }, { headers });
+            return res.data.data.list.content.map(i => i.id);
+          }
+
+          async function deleteItem(id) {
+            const mutation = `mutation {
+              removeSpeciesListItem(id: "${id}") { id }
+            }`;
+            return axios.post(api, { query: mutation }, { headers });
+          }
+
+          async function addItem(row) {
+            const name = row.scientificName;
+            if (!name) return;
+
+            const fields = Object.entries(row)
+              .filter(([k, v]) => v && v.trim())
+              .map(([k, v]) => `${k}: """${v.replace(/"/g, '\\"')}"""`)
+              .join(', ');
+
+            const mutation = `mutation {
+              addSpeciesListItem(inputSpeciesListItem: {
+                speciesListID: "${listId}",
+                ${fields}
+              }) {
+                id
+                scientificName
+              }
+            }`;
+
+            return axios.post(api, { query: mutation }, { headers });
           }
 
           (async () => {
             try {
-            console.log("📤 Uploading CSV...");
-            const handle = await uploadFile();
-            console.log(`✅ File uploaded. Handle: ${handle}`);
+              console.log("🧹 Deleting existing list items...");
+              const ids = await getItemIds();
+              for (const id of ids) {
+                await deleteItem(id);
+                console.log(`🗑️ Deleted ${id}`);
+              }
 
-            console.log("🚀 Ingesting to replace list...");
-            const ingestResult = await ingestFile(handle);
-            console.log("🎉 Ingested:", ingestResult);
-          } catch (err) {
-            console.error("❌ Error:", err.response?.data || err.message);
-            process.exit(1);
+              console.log(`📥 Replacing with CSV from ${filePath}...`);
+              const stream = fs.createReadStream(filePath);
+              let count = 0;
+              const rows = [];
+
+              stream.pipe(csv())
+                .on('data', (row) => rows.push(row))
+                .on('end', async () => {
+                  for (const row of rows) {
+                    try {
+                      await addItem(row);
+                      console.log(`✅ Added: ${row.scientificName}`);
+                      count++;
+                    } catch (e) {
+                      console.error(`❌ Failed to add ${row.scientificName}`, e.response?.data || e.message);
+                    }
+                  }
+                  console.log(`🎉 Done. ${count} records added.`);
+                });
+            } catch (err) {
+              console.error("❌ Error:", err.response?.data || err.message);
+              process.exit(1);
             }
-            })();
+          })();
           EOF
