@@ -1,4 +1,4 @@
-name: Update Species List Metadata (One-Off)
+name: Update Species List License (REST)
 
 on:
   workflow_dispatch:
@@ -8,12 +8,12 @@ on:
         required: true
         default: '67b51f358a0f582bd7ef9d73'
       licenseURL:
-        description: 'License URL to apply'
+        description: 'New license URL'
         required: true
         default: 'https://creativecommons.org/licenses/by/4.0/'
 
 jobs:
-  update-metadata:
+  update-license:
     runs-on: ubuntu-latest
     steps:
       - name: Init Node project
@@ -22,7 +22,7 @@ jobs:
       - name: Install axios
         run: npm install axios
 
-      - name: Update species list license
+      - name: Send REST PUT to update license
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           LIST_ID: ${{ github.event.inputs.speciesListID }}
@@ -30,35 +30,27 @@ jobs:
         run: |
           node <<'EOF'
           const axios = require('axios');
-          
+
           const token = process.env.ACCESS_TOKEN;
           const listId = process.env.LIST_ID;
           const license = process.env.LICENSE;
-          const api = "https://lists-ws.test.ala.org.au/graphql";
 
-          const mutation = `
-            mutation {
-              updateSpeciesList(inputSpeciesList: {
-                id: "${listId}",
-                license: "${license}"
-              }) {
-                id
-                license
-              }
-            }
-          `;
+          const url = `https://lists-ws.test.ala.org.au/speciesList/${listId}`;
+          const payload = {
+            license: license
+          };
+
+          const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          };
 
           (async () => {
             try {
-              const res = await axios.post(api, { query: mutation }, {
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                }
-              });
-              console.log("🔎 Raw response:", JSON.stringify(res.data, null, 2));
+              const res = await axios.put(url, payload, { headers });
+              console.log("✅ License updated:", res.data);
             } catch (err) {
-              console.error("❌ Error:", err.response?.data || err.message);
+              console.error("❌ REST error:", err.response?.data || err.message);
               process.exit(1);
             }
           })();
