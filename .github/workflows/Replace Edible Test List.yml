@@ -44,37 +44,37 @@ jobs:
           const res = await axios.post(`${apiBase}/upload`, form, { headers });
           console.log("🔎 Upload response:", res.data);
 
-  // Flexible handling: support either file: "string" or file: { name: "string" }
-  const fileHandle = typeof res.data.file === 'string' ? res.data.file : res.data.file?.name;
-  if (!fileHandle) throw new Error("No file handle returned from upload.");
-  return fileHandle;
-}
+          // Flexible handling: support either file: "string" or file: { name: "string" }
+          const fileHandle = typeof res.data.file === 'string' ? res.data.file : res.data.file?.name;
+          if (!fileHandle) throw new Error("No file handle returned from upload.");
+          return fileHandle;
+          }
 
-  async function ingestFile(fileHandle) {
-  const form = new FormData();
-  form.append('file', fileHandle);
+          async function ingestFile(fileHandle) {
+          const form = new FormData();
+          form.append('file', fileHandle);
 
-  const headers = {
-    ...form.getHeaders(),
-    Authorization: `Bearer ${token}`
-  };
+          const headers = {
+          ...form.getHeaders(),
+          Authorization: `Bearer ${token}`
+          };
 
-  const res = await axios.post(`${apiBase}/ingest/${listId}`, form, { headers });
-  return res.data;
-}
+          const res = await axios.post(`${apiBase}/ingest/${listId}`, form, { headers });
+          return res.data;
+          }
 
-(async () => {
-  try {
-    console.log("📤 Uploading CSV...");
-    const handle = await uploadFile();
-    console.log(`✅ File uploaded. Handle: ${handle}`);
+          (async () => {
+            try {
+            console.log("📤 Uploading CSV...");
+            const handle = await uploadFile();
+            console.log(`✅ File uploaded. Handle: ${handle}`);
 
-    console.log("🚀 Ingesting to replace list...");
-    const ingestResult = await ingestFile(handle);
-    console.log("🎉 Ingested:", ingestResult);
-  } catch (err) {
-    console.error("❌ Error:", err.response?.data || err.message);
-    process.exit(1);
-  }
-})();
-EOF
+            console.log("🚀 Ingesting to replace list...");
+            const ingestResult = await ingestFile(handle);
+            console.log("🎉 Ingested:", ingestResult);
+          } catch (err) {
+            console.error("❌ Error:", err.response?.data || err.message);
+            process.exit(1);
+            }
+            })();
+          EOF
