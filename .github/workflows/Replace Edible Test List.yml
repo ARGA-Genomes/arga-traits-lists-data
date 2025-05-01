@@ -10,9 +10,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Install Node.js dependencies
-        run: npm install axios form-data
-
       - name: Replace species list via upload + ingest
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
