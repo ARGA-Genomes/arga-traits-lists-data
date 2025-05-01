@@ -20,6 +20,7 @@ jobs:
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           LIST_ID: "681363e168ab293a5a947908"
+          LIST_PREFIX: "ARGA_Data_Imports_Edible_List_MASTER_"
         run: |
           node <<'EOF'
           const fs = require('fs');
@@ -32,16 +33,20 @@ jobs:
           const api = "https://lists-ws.test.ala.org.au/graphql";
 
           const fileDir = './imported_GoogleSheets';
-          const files = fs.readdirSync(fileDir)
-          .filter(f => f.endsWith('.csv'))
-          .map(f => ({
-            name: f,
-            time: fs.statSync(path.join(fileDir, f)).mtime.getTime()
-          }))
-          .sort((a, b) => b.time - a.time);
+          const prefix = process.env.LIST_PREFIX;
 
-          const filePath = path.join(fileDir, files[0].name);
-          console.log(`📄 Using file: ${files[0].name}`);
+          const fileMatch = fs.readdirSync(fileDir)
+            .filter(f => f.startsWith(prefix) && f.endsWith('.csv'))
+            .map(f => ({
+              name: f,
+              mtime: fs.statSync(path.join(fileDir, f)).mtime.getTime()
+            }))
+            .sort((a, b) => b.mtime - a.mtime)[0];
+
+          if (!fileMatch) throw new Error(`❌ No file found for prefix "${prefix}"`);
+
+          const filePath = path.join(fileDir, fileMatch.name);
+          console.log(`📄 Using file: ${fileMatch.name}`);
 
           const headers = {
             'Content-Type': 'application/json',
