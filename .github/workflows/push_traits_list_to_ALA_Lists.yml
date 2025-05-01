@@ -40,4 +40,4 @@ jobs:
           curl -s -X POST "https://lists-ws.test.ala.org.au/graphql" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -d '{"query":"mutation create($createItem: InputSpeciesListItem) { newItem: addSpeciesListItem(inputSpeciesListItem: $createItem) { id scientificName } }","variables":{"createItem":{"scientificName":"Testus venomosa"}}}'
+            -d '{"query":"mutation create($createItem: InputSpeciesListItem) { newItem: addSpeciesListItem(inputSpeciesListItem: $createItem) { id scientificName } }","variables":{"createItem":{"speciesListID": "67bbbd07a9349d409385d6de", "scientificName": "Testus venomosa"}}}'
