@@ -40,5 +40,4 @@ jobs:
           curl -s -X POST "https://lists-ws.test.ala.org.au/graphql" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -d '{"query":"mutation CreateListItem($input: ListItemInput!) { createListItem(input: $input) { id name } }","variables":{"input":{"listId":"67bbbd07a9349d409385d6de","item":{"name":"Testus venomosa","guid":"urn:lsid:biodiversity.org.au:afd.taxon:1234abcd","dataResourceUid":"dr123","itemType":"TAXON"}}}}'
-
+            -d '{"query":"mutation create($createItem: InputSpeciesListItem) { newItem: addSpeciesListItem(inputSpeciesListItem: $createItem) { id scientificName } }","variables":{"createItem":{"listId":"67bbbd07a9349d409385d6de","scientificName":"Testus venomosa","guid":"urn:lsid:biodiversity.org.au:afd.taxon:1234abcd","itemType":"TAXON"}}}'
