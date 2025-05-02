@@ -60,12 +60,12 @@ jobs:
             });
 
             console.log("🧾 Raw upload response:", JSON.stringify(res.data, null, 2));
-            return res.data.file || res.data.name || res.data.handle;
+            return res.data.uploadId;
           }
 
-          async function triggerReingest(fileHandle) {
+          async function triggerReingest(uploadId) {
             const form = new FormData();
-            form.append('file', fileHandle);
+            form.append('file', uploadId);
 
             const res = await axios.post(`${apiBase}/reingest/${listId}`, form, {
               headers: {
@@ -90,9 +90,9 @@ jobs:
             try {
               console.log("📤 Uploading file...");
               const handle = await uploadFile();
-              console.log("✅ Uploaded. File handle:", handle);
+              console.log("✅ Uploaded. Upload ID:", handle);
 
-              if (!handle) throw new Error("❌ Upload succeeded but no file handle was returned");
+              if (!handle) throw new Error("❌ Upload succeeded but no uploadId was returned");
 
               console.log("🚀 Triggering reingest...");
               const ingest = await triggerReingest(handle);
