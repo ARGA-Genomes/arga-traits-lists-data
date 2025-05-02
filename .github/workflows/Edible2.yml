@@ -1,0 +1,100 @@
+name: Replace Edible species list in ALA using GraphQL mutation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  graphql-replace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Init Node project
+        run: npm init -y
+
+      - name: Install dependencies
+        run: npm install axios form-data
+
+      - name: Replace species list using GraphQL
+        env:
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          LIST_ID: "681363e168ab293a5a947908"
+          LIST_PREFIX: "ARGA_Data_Imports_Edible_List_MASTER_"
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const axios = require('axios');
+          const FormData = require('form-data');
+
+          const listId = process.env.LIST_ID;
+          const token = process.env.ACCESS_TOKEN;
+          const prefix = process.env.LIST_PREFIX;
+          const fileDir = './imported_GoogleSheets/Edible_species_list';
+
+          const fileMatch = fs.readdirSync(fileDir)
+            .filter(f => f.startsWith(prefix) && f.endsWith('.csv'))
+            .map(f => ({
+              name: f,
+              mtime: fs.statSync(path.join(fileDir, f)).mtime.getTime()
+            }))
+            .sort((a, b) => b.mtime - a.mtime)[0];
+
+          if (!fileMatch) throw new Error(`❌ No file found for prefix "${prefix}"`);
+          const filePath = path.join(fileDir, fileMatch.name);
+          console.log(`📄 Using file: ${fileMatch.name}`);
+
+          const uploadUrl = "https://lists-ws.test.ala.org.au/upload";
+          const graphqlUrl = "https://lists-ws.test.ala.org.au/graphql";
+
+          async function uploadFile() {
+            const form = new FormData();
+            form.append('file', fs.createReadStream(filePath));
+
+            const res = await axios.post(uploadUrl, form, {
+              headers: {
+                ...form.getHeaders(),
+                Authorization: `Bearer ${token}`
+              }
+            });
+
+            console.log("🧾 Upload response:", JSON.stringify(res.data, null, 2));
+            return res.data.localFile;
+          }
+
+          async function replaceListItems(fileHandle) {
+            const query = `mutation {
+              replaceSpeciesListItems(inputReplaceSpeciesListItems: {
+                speciesListID: \"${listId}\",
+                file: \"${fileHandle}\"
+              }) {
+                id
+                name
+              }
+            }`;
+
+            const headers = {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            };
+
+            const res = await axios.post(graphqlUrl, { query }, { headers });
+            console.log("✅ Replace result:", JSON.stringify(res.data, null, 2));
+          }
+
+          (async () => {
+            try {
+              console.log("📤 Uploading file...");
+              const fileHandle = await uploadFile();
+              if (!fileHandle) throw new Error("❌ Upload succeeded but no localFile was returned");
+
+              console.log("🚀 Replacing list using GraphQL mutation...");
+              await replaceListItems(fileHandle);
+              console.log("🎉 Done.");
+            } catch (err) {
+              console.error("❌ Error:", err.response?.data || err.message);
+              process.exit(1);
+            }
+          })();
+          EOF
