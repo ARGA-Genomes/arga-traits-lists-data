@@ -14,9 +14,9 @@ jobs:
         run: npm init -y
 
       - name: Install dependencies
-        run: npm install axios csv-parser
+        run: npm install axios form-data
 
-      - name: Replace list using GraphQL
+      - name: Upload and reingest species list
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           LIST_ID: "681363e168ab293a5a947908"
@@ -26,14 +26,12 @@ jobs:
           const fs = require('fs');
           const path = require('path');
           const axios = require('axios');
-          const csv = require('csv-parser');
+          const FormData = require('form-data');
 
           const listId = process.env.LIST_ID;
           const token = process.env.ACCESS_TOKEN;
-          const api = "https://lists-ws.test.ala.org.au/graphql";
-
-          const fileDir = './imported_GoogleSheets/Edible_species_list';
           const prefix = process.env.LIST_PREFIX;
+          const fileDir = './imported_GoogleSheets/Edible_species_list';
 
           const fileMatch = fs.readdirSync(fileDir)
             .filter(f => f.startsWith(prefix) && f.endsWith('.csv'))
@@ -44,88 +42,59 @@ jobs:
             .sort((a, b) => b.mtime - a.mtime)[0];
 
           if (!fileMatch) throw new Error(`❌ No file found for prefix "${prefix}"`);
-
           const filePath = path.join(fileDir, fileMatch.name);
           console.log(`📄 Using file: ${fileMatch.name}`);
 
-          const headers = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          };
+          const apiBase = "https://lists-ws.test.ala.org.au";
+          const headers = { Authorization: `Bearer ${token}` };
 
-          async function getItemIds() {
-            const query = `query {
-              list: filterSpeciesList(speciesListID: "${listId}") {
-                content { id }
+          async function uploadFile() {
+            const form = new FormData();
+            form.append('file', fs.createReadStream(filePath));
+
+            const res = await axios.post(`${apiBase}/upload`, form, {
+              headers: {
+                ...form.getHeaders(),
+                Authorization: `Bearer ${token}`
               }
-            }`;
-            const res = await axios.post(api, { query }, { headers });
-            if (!res.data?.data?.list) throw new Error("❌ No list found for that ID.");
-            return res.data.data.list.content.map(i => i.id);
+            });
+            return res.data.file;
           }
 
-          async function deleteItem(id) {
-            const mutation = `mutation {
-              removeSpeciesListItem(id: "${id}") { id }
-            }`;
-            return axios.post(api, { query: mutation }, { headers });
+          async function triggerReingest(fileHandle) {
+            const form = new FormData();
+            form.append('file', fileHandle);
+
+            const res = await axios.post(`${apiBase}/reingest/${listId}`, form, {
+              headers: {
+                ...form.getHeaders(),
+            Authorization: `Bearer ${token}`
           }
+        });
+        return res.data;
+      }
 
-          async function addItem(row) {
-            const name = row.scientificName;
-            if (!name) {
-              console.warn("⚠️ Missing scientificName, skipping:", row);
-              return;
-            }
-
-            const fields = Object.entries(row)
-              .filter(([k, v]) => v && v.trim())
-              .map(([k, v]) => `${k}: """${v.replace(/"/g, '\\"')}"""`)
-              .join(', ');
-
-            const mutation = `mutation {
-              addSpeciesListItem(inputSpeciesListItem: {
-                speciesListID: "${listId}",
-                ${fields}
-              }) {
-                id
-                scientificName
-              }
-            }`;
-
-            return axios.post(api, { query: mutation }, { headers });
-          }
+      async function checkProgress() {
+        try {
+          const res = await axios.get(`${apiBase}/reingest/${listId}/progress`, { headers });
+          console.log("🔄 Progress:", JSON.stringify(res.data, null, 2));
+        } catch (e) {
+          console.error("⚠️ Progress check failed:", e.response?.data || e.message);
+        }
+      }
 
           (async () => {
             try {
-              console.log("🧹 Deleting existing list items...");
-              const ids = await getItemIds();
-              for (const id of ids) {
-                await deleteItem(id);
-                console.log(`🗑️ Deleted ${id}`);
-              }
+              console.log("📤 Uploading file...");
+              const handle = await uploadFile();
+              console.log("✅ Uploaded. File handle:", handle);
 
-              console.log(`📥 Replacing with CSV from ${filePath}...`);
-              const stream = fs.createReadStream(filePath);
-              let count = 0;
-              const rows = [];
+              console.log("🚀 Triggering reingest...");
+              const ingest = await triggerReingest(handle);
+              console.log("🧾 Reingest response:", ingest);
 
-              stream.pipe(csv({
-                mapHeaders: ({ header }) => header.replace(/^\uFEFF/, '').trim()
-              }))
-              .on('data', (row) => rows.push(row))
-              .on('end', async () => {
-                for (const row of rows) {
-                  try {
-                    await addItem(row);
-                    console.log(`✅ Added: ${row.scientificName || '[undefined]'}`);
-                    count++;
-                  } catch (e) {
-                    console.error(`❌ Failed to add ${row.scientificName}`, e.response?.data || e.message);
-                  }
-                }
-                console.log(`🎉 Done. ${count} records added.`);
-              });
+              console.log("🕵️ Checking progress...");
+              await checkProgress();
             } catch (err) {
               console.error("❌ Error:", err.response?.data || err.message);
               process.exit(1);
