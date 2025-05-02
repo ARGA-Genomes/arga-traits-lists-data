@@ -1,10 +1,10 @@
-name: Replace Edible species list in ALA using REST
+name: Upload and ingest Edible species list into ALA Lists
 
 on:
   workflow_dispatch:
 
 jobs:
-  rest-replace:
+  graphql-replace:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -35,51 +35,55 @@ jobs:
 
           const fileMatch = fs.readdirSync(fileDir)
             .filter(f => f.startsWith(prefix) && f.endsWith('.csv'))
-            .map(f => ({ name: f, time: fs.statSync(path.join(fileDir, f)).mtime.getTime() }))
+            .map(f => ({
+              name: f,
+              time: fs.statSync(path.join(fileDir, f)).mtime.getTime()
+            }))
             .sort((a, b) => b.time - a.time)[0];
 
           if (!fileMatch) {
-            console.error("❌ No matching CSV file found.");
+            console.error("❌ No matching file found.");
             process.exit(1);
           }
 
-          const csvPath = path.join(fileDir, fileMatch.name);
+          const filePath = path.join(fileDir, fileMatch.name);
           console.log(`📄 Using file: ${fileMatch.name}`);
 
           const form = new FormData();
-          form.append('file', fs.createReadStream(csvPath));
+          form.append('file', fs.createReadStream(filePath));
 
           console.log("📤 Uploading file...");
-          axios.post('https://lists-ws.test.ala.org.au/upload', form, {
+          axios.post(`https://lists-ws.test.ala.org.au/upload`, form, {
             headers: {
               ...form.getHeaders(),
               Authorization: `Bearer ${token}`
             }
           })
           .then(response => {
-            const handle = response.data.localFile;
-            if (!handle) {
-              console.error("❌ Uploaded, but no file handle was returned");
+            const localFile = response.data.localFile;
+            if (!localFile) {
+              console.error("❌ Upload failed: no file handle was returned");
               process.exit(1);
             }
-            console.log(`✅ Uploaded. Local file ID: ${handle}`);
-
+            console.log(`✅ Uploaded. Local file ID: ${localFile}`);
             console.log("🚀 Triggering reingest...");
-            return axios.post(`https://lists-ws.test.ala.org.au/ingest/${listId}`, null, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/x-www-form-urlencoded'
-              },
-              params: {
-                file: handle
+
+            return axios.post(
+              `https://lists-ws.test.ala.org.au/ingest/${listId}`,
+              new URLSearchParams({ file: localFile }),
+              {
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  Authorization: `Bearer ${token}`
+                }
               }
-            });
+            );
           })
-          .then(ingestResp => {
-            console.log("✅ Reingest triggered.");
+          .then(() => {
+            console.log("✅ Ingest triggered successfully.");
           })
           .catch(err => {
-            console.error("❌ Error:", err.response?.data || err.message);
+            console.error("❌ Error:", err.response ? err.response.data : err.message);
             process.exit(1);
           });
           EOF
