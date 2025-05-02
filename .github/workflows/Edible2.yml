@@ -1,10 +1,10 @@
-name: Replace Edible species list in ALA using GraphQL mutation
+name: Replace Edible species list in ALA using REST
 
 on:
   workflow_dispatch:
 
 jobs:
-  graphql-replace:
+  rest-replace:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: npm install axios form-data
 
-      - name: Replace species list using GraphQL
+      - name: Upload and ingest species list
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           LIST_ID: "681363e168ab293a5a947908"
@@ -35,66 +35,51 @@ jobs:
 
           const fileMatch = fs.readdirSync(fileDir)
             .filter(f => f.startsWith(prefix) && f.endsWith('.csv'))
-            .map(f => ({
-              name: f,
-              mtime: fs.statSync(path.join(fileDir, f)).mtime.getTime()
-            }))
-            .sort((a, b) => b.mtime - a.mtime)[0];
+            .map(f => ({ name: f, time: fs.statSync(path.join(fileDir, f)).mtime.getTime() }))
+            .sort((a, b) => b.time - a.time)[0];
 
-          if (!fileMatch) throw new Error(`❌ No file found for prefix "${prefix}"`);
-          const filePath = path.join(fileDir, fileMatch.name);
+          if (!fileMatch) {
+            console.error("❌ No matching CSV file found.");
+            process.exit(1);
+          }
+
+          const csvPath = path.join(fileDir, fileMatch.name);
           console.log(`📄 Using file: ${fileMatch.name}`);
 
-          const uploadUrl = "https://lists-ws.test.ala.org.au/upload";
-          const graphqlUrl = "https://lists-ws.test.ala.org.au/graphql";
+          const form = new FormData();
+          form.append('file', fs.createReadStream(csvPath));
 
-          async function uploadFile() {
-            const form = new FormData();
-            form.append('file', fs.createReadStream(filePath));
-
-            const res = await axios.post(uploadUrl, form, {
-              headers: {
-                ...form.getHeaders(),
-                Authorization: `Bearer ${token}`
-              }
-            });
-
-            console.log("🧾 Upload response:", JSON.stringify(res.data, null, 2));
-            return res.data.localFile;
-          }
-
-          async function replaceListItems(fileHandle) {
-            const query = `mutation {
-              replaceSpeciesListItems(inputReplaceSpeciesListItems: {
-                speciesListID: \"${listId}\",
-                file: \"${fileHandle}\"
-              }) {
-                id
-                name
-              }
-            }`;
-
-            const headers = {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            };
-
-            const res = await axios.post(graphqlUrl, { query }, { headers });
-            console.log("✅ Replace result:", JSON.stringify(res.data, null, 2));
-          }
-
-          (async () => {
-            try {
-              console.log("📤 Uploading file...");
-              const fileHandle = await uploadFile();
-              if (!fileHandle) throw new Error("❌ Upload succeeded but no localFile was returned");
-
-              console.log("🚀 Replacing list using GraphQL mutation...");
-              await replaceListItems(fileHandle);
-              console.log("🎉 Done.");
-            } catch (err) {
-              console.error("❌ Error:", err.response?.data || err.message);
+          console.log("📤 Uploading file...");
+          axios.post('https://lists-ws.test.ala.org.au/upload', form, {
+            headers: {
+              ...form.getHeaders(),
+              Authorization: `Bearer ${token}`
+            }
+          })
+          .then(response => {
+            const handle = response.data.localFile;
+            if (!handle) {
+              console.error("❌ Uploaded, but no file handle was returned");
               process.exit(1);
             }
-          })();
+            console.log(`✅ Uploaded. Local file ID: ${handle}`);
+
+            console.log("🚀 Triggering reingest...");
+            return axios.post(`https://lists-ws.test.ala.org.au/ingest/${listId}`, null, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              params: {
+                file: handle
+              }
+            });
+          })
+          .then(ingestResp => {
+            console.log("✅ Reingest triggered.");
+          })
+          .catch(err => {
+            console.error("❌ Error:", err.response?.data || err.message);
+            process.exit(1);
+          });
           EOF
