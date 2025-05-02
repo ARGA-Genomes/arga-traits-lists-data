@@ -15,7 +15,7 @@ jobs:
 
       - name: Install dependencies
         run: npm install axios form-data
-
+        
       - name: Upload and reingest species list
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
