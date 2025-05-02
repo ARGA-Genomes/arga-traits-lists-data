@@ -51,25 +51,36 @@ jobs:
           async function uploadFile() {
             const form = new FormData();
             form.append('file', fs.createReadStream(filePath));
+
             const res = await axios.post(`${apiBase}/upload`, form, {
-              headers: { ...form.getHeaders(), Authorization: `Bearer ${token}` }
+              headers: {
+                ...form.getHeaders(),
+                Authorization: `Bearer ${token}`
+              }
             });
-            return res.data.file;
+
+            console.log("🧾 Raw upload response:", JSON.stringify(res.data, null, 2));
+            return res.data.file || res.data.name || res.data.handle;
           }
 
           async function triggerReingest(fileHandle) {
             const form = new FormData();
             form.append('file', fileHandle);
+
             const res = await axios.post(`${apiBase}/reingest/${listId}`, form, {
-              headers: { ...form.getHeaders(), Authorization: `Bearer ${token}` }
+              headers: {
+                ...form.getHeaders(),
+                Authorization: `Bearer ${token}`
+              }
             });
+
             return res.data;
           }
 
           async function checkProgress() {
             try {
               const res = await axios.get(`${apiBase}/reingest/${listId}/progress`, { headers });
-              console.log("🔄 Progress:\n", JSON.stringify(res.data, null, 2));
+              console.log("🔄 Progress:", JSON.stringify(res.data, null, 2));
             } catch (e) {
               console.error("⚠️ Progress check failed:", e.response?.data || e.message);
             }
@@ -80,6 +91,8 @@ jobs:
               console.log("📤 Uploading file...");
               const handle = await uploadFile();
               console.log("✅ Uploaded. File handle:", handle);
+
+              if (!handle) throw new Error("❌ Upload succeeded but no file handle was returned");
 
               console.log("🚀 Triggering reingest...");
               const ingest = await triggerReingest(handle);
