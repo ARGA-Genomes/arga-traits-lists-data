@@ -60,12 +60,12 @@ jobs:
             });
 
             console.log("🧾 Raw upload response:", JSON.stringify(res.data, null, 2));
-            return res.data.uploadId;
+            return res.data.localFile;
           }
 
-          async function triggerReingest(uploadId) {
+          async function triggerReingest(fileHandle) {
             const form = new FormData();
-            form.append('file', uploadId);
+            form.append('file', fileHandle);
 
             const res = await axios.post(`${apiBase}/reingest/${listId}`, form, {
               headers: {
@@ -90,9 +90,9 @@ jobs:
             try {
               console.log("📤 Uploading file...");
               const handle = await uploadFile();
-              console.log("✅ Uploaded. Upload ID:", handle);
+              console.log("✅ Uploaded. Local file ID:", handle);
 
-              if (!handle) throw new Error("❌ Upload succeeded but no uploadId was returned");
+              if (!handle) throw new Error("❌ Upload succeeded but no localFile was returned");
 
               console.log("🚀 Triggering reingest...");
               const ingest = await triggerReingest(handle);
