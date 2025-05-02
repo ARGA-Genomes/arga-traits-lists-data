@@ -1,10 +1,10 @@
-name: Replace Edible species list in ALA using Upload + Reingest API
+name: Replace Edible species list in ALA using GraphQL
 
 on:
   workflow_dispatch:
 
 jobs:
-  rest-replace:
+  graphql-replace:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -14,9 +14,9 @@ jobs:
         run: npm init -y
 
       - name: Install dependencies
-        run: npm install axios form-data
+        run: npm install axios csv-parser
 
-      - name: Upload and reingest species list
+      - name: Replace list using GraphQL
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           LIST_ID: "681363e168ab293a5a947908"
@@ -26,83 +26,78 @@ jobs:
           const fs = require('fs');
           const path = require('path');
           const axios = require('axios');
-          const FormData = require('form-data');
+          const csv = require('csv-parser');
 
-          const listId = process.env.LIST_ID;
+          const specieslistId = process.env.LIST_ID;
           const token = process.env.ACCESS_TOKEN;
           const prefix = process.env.LIST_PREFIX;
-          const fileDir = './imported_GoogleSheets/Edible_species_list';
 
-          const fileMatch = fs.readdirSync(fileDir)
+          const api = "https://lists-ws.test.ala.org.au/graphql";
+
+          const fileName = fs.readdirSync('./imported_GoogleSheets/Edible_species_list')
             .filter(f => f.startsWith(prefix) && f.endsWith('.csv'))
-            .map(f => ({
-              name: f,
-              mtime: fs.statSync(path.join(fileDir, f)).mtime.getTime()
-            }))
-            .sort((a, b) => b.mtime - a.mtime)[0];
+            .sort()
+            .reverse()[0];
 
-          if (!fileMatch) throw new Error(`❌ No file found for prefix \"${prefix}\"`);
-          const filePath = path.join(fileDir, fileMatch.name);
-          console.log(`📄 Using file: ${fileMatch.name}`);
+          const filePath = path.join('./imported_GoogleSheets/Edible_species_list', fileName);
 
-          const apiBase = "https://lists-ws.test.ala.org.au";
-          const headers = { Authorization: `Bearer ${token}` };
+          const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          };
 
-          async function uploadFile() {
-            const form = new FormData();
-            form.append('file', fs.createReadStream(filePath));
-
-            const res = await axios.post(`${apiBase}/upload`, form, {
-              headers: {
-                ...form.getHeaders(),
-                Authorization: `Bearer ${token}`
+          async function getItemIds() {
+            const query = `query {
+              list: filterSpeciesList(speciesListID: "${specieslistId}") {
+                content { id }
               }
-            });
-
-            console.log("🧾 Raw upload response:", JSON.stringify(res.data, null, 2));
-            return res.data.localFile;
+            }`;
+            const res = await axios.post(api, { query }, { headers });
+            return res.data.data.list.content.map(item => item.id);
           }
 
-          async function triggerReingest(fileHandle) {
-            const form = new FormData();
-            form.append('file', fileHandle);
-
-            const res = await axios.post(`${apiBase}/reingest/${listId}`, form, {
-              headers: {
-                ...form.getHeaders(),
-                Authorization: `Bearer ${token}`
-              }
-            });
-
-            return res.data;
+          async function deleteItem(id) {
+            const mutation = `mutation { removeSpeciesListItem(id: "${id}") { id } }`;
+            return axios.post(api, { query: mutation }, { headers });
           }
 
-          async function checkProgress() {
-            try {
-              const res = await axios.get(`${apiBase}/reingest/${listId}/progress`, { headers });
-              console.log("🔄 Progress:", JSON.stringify(res.data, null, 2));
-            } catch (e) {
-              console.error("⚠️ Progress check failed:", e.response?.data || e.message);
-            }
+          async function addItem(name) {
+            const mutation = `mutation {
+              newItem: addSpeciesListItem(inputSpeciesListItem: {
+                speciesListID: "${specieslistId}",
+                scientificName: "${name}"
+              }) { id scientificName }
+            }`;
+            return axios.post(api, { query: mutation }, { headers });
           }
 
           (async () => {
-            try {
-              console.log("📤 Uploading file...");
-              const handle = await uploadFile();
-              console.log("✅ Uploaded. Local file ID:", handle);
-
-              if (!handle) throw new Error("❌ Upload succeeded but no localFile was returned");
-
-              console.log("🚀 Triggering reingest...");
-              const ingest = await triggerReingest(handle);
-              console.log("🧾 Reingest response:", ingest);
-
-              console.log("🕵️ Checking progress...");
-              await checkProgress();
-            } catch (err) {
-              console.error("❌ Error:", err.response?.data || err.message);
-              process.exit(1);
+            console.log(`🗂️ Using file: ${fileName}`);
+            console.log("🧹 Deleting existing records...");
+            const ids = await getItemIds();
+            for (const id of ids) {
+              await deleteItem(id);
+              console.log(`🗑️ Deleted ${id}`);
             }
+
+            console.log("📥 Re-inserting from:", filePath);
+            const stream = fs.createReadStream(filePath);
+            let count = 0;
+            stream.pipe(csv())
+              .on('data', async (row) => {
+                const name = row.scientificName;
+                if (name && name.trim()) {
+                  try {
+                    const res = await addItem(name.trim());
+                    console.log(`✅ Added: ${name}`);
+                  } catch (e) {
+                    console.log(`❌ Failed to add: ${name}`, e.response?.data || e.message);
+                  }
+                  count++;
+                }
+              })
+              .on('end', () => {
+                console.log(`🎉 Done. Added ${count} records.`);
+              });
           })();
           EOF
