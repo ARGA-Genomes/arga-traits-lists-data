@@ -1,10 +1,10 @@
-name: Replace Edible species list in ALA using GraphQL
+name: Replace Edible species list in ALA using Upload + Reingest API
 
 on:
   workflow_dispatch:
 
 jobs:
-  graphql-replace:
+  rest-replace:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -15,7 +15,7 @@ jobs:
 
       - name: Install dependencies
         run: npm install axios form-data
-        
+
       - name: Upload and reingest species list
         env:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
             }))
             .sort((a, b) => b.mtime - a.mtime)[0];
 
-          if (!fileMatch) throw new Error(`❌ No file found for prefix "${prefix}"`);
+          if (!fileMatch) throw new Error(`❌ No file found for prefix \"${prefix}\"`);
           const filePath = path.join(fileDir, fileMatch.name);
           console.log(`📄 Using file: ${fileMatch.name}`);
 
@@ -51,12 +51,8 @@ jobs:
           async function uploadFile() {
             const form = new FormData();
             form.append('file', fs.createReadStream(filePath));
-
             const res = await axios.post(`${apiBase}/upload`, form, {
-              headers: {
-                ...form.getHeaders(),
-                Authorization: `Bearer ${token}`
-              }
+              headers: { ...form.getHeaders(), Authorization: `Bearer ${token}` }
             });
             return res.data.file;
           }
@@ -64,24 +60,20 @@ jobs:
           async function triggerReingest(fileHandle) {
             const form = new FormData();
             form.append('file', fileHandle);
-
             const res = await axios.post(`${apiBase}/reingest/${listId}`, form, {
-              headers: {
-                ...form.getHeaders(),
-            Authorization: `Bearer ${token}`
+              headers: { ...form.getHeaders(), Authorization: `Bearer ${token}` }
+            });
+            return res.data;
           }
-        });
-        return res.data;
-      }
 
-      async function checkProgress() {
-        try {
-          const res = await axios.get(`${apiBase}/reingest/${listId}/progress`, { headers });
-          console.log("🔄 Progress:", JSON.stringify(res.data, null, 2));
-        } catch (e) {
-          console.error("⚠️ Progress check failed:", e.response?.data || e.message);
-        }
-      }
+          async function checkProgress() {
+            try {
+              const res = await axios.get(`${apiBase}/reingest/${listId}/progress`, { headers });
+              console.log("🔄 Progress:\n", JSON.stringify(res.data, null, 2));
+            } catch (e) {
+              console.error("⚠️ Progress check failed:", e.response?.data || e.message);
+            }
+          }
 
           (async () => {
             try {
