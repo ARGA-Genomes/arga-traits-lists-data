@@ -296,7 +296,7 @@ webhooks.on('push', async ({ payload }) => {
           console.log(`Calling reloadList for folder: ${parentFolderName}`);
           await reloadList(parentFolderName, fileContent, drMap);
           await sendSlackNotification(
-            `✅ *List Reload Completed*\n\n- File: \`${fileName}\`\n- Folder: <https://github.com/${pushEvent.repository.full_name}/tree/main/${parentFolderName}|${parentFolderName}>`
+            `✅ *List Reload Completed*\n\n• File: \`${fileName}\`\n• Folder: <https://github.com/${pushEvent.repository.full_name}/tree/main/imported_GoogleSheets/${parentFolderName}|${parentFolderName}>`
           );
         } else {
           console.error(`Failed to fetch content for ${addedFile}`);
