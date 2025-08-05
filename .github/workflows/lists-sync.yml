@@ -64,6 +64,7 @@ jobs:
         with:
           image: ${{ env.IMAGE_NAME }}
           tags: latest ${{ github.sha }}
+          context: ./lists-sync
           containerfiles: |
             ./lists-sync/Containerfile
 
