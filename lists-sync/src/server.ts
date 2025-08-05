@@ -19,6 +19,8 @@ const requiredEnvVars = [
   'SLACK_BOT_TOKEN',
   'SLACK_SIGNING_SECRET',
   'SLACK_CHANNEL_ID',
+  'LISTS_API_ENDPOINT',
+  'LISTS_TOKEN',
 ];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
