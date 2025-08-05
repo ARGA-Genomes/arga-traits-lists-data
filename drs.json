@@ -1,7 +1,6 @@
 {
   "prod": {},
   "test": {
-    "Edible_species_list": "dr23166",
-    "test_list_noexist": "drNone"
+    "Edible_species_list": "dr23166"
   }
 }
