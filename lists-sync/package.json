@@ -22,8 +22,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "node --loader ts-node/esm src/server.ts",
-    "docker:build": "docker build -t arga-lists-sync .",
-    "docker:run": "docker run -p 3000:3000 --env-file .env arga-lists-sync",
+    "docker:build": "docker build -f ./Containerfile -t lists-sync .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env lists-sync",
     "health": "./health-check.sh",
     "start": "node dist/server.js"
   }
