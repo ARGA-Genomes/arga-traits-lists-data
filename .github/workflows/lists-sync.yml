@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - 'lists-sync/**'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
