@@ -329,15 +329,37 @@ app.use(
   express.raw({ type: 'application/json' }),
   async (req, res) => {
     try {
-      await webhooks.verifyAndReceive({
-        id: req.headers['x-github-delivery'] as string,
-        name: req.headers['x-github-event'] as any,
-        signature: req.headers['x-hub-signature-256'] as string,
-        payload: req.body.toString(),
-      });
+      // First, verify the webhook signature to ensure it's legitimate
+      const signature = req.headers['x-hub-signature-256'] as string;
+      const payload = req.body.toString();
+
+      // Verify signature using the webhooks instance
+      const isValid = webhooks.verify(payload, signature);
+
+      if (!isValid) {
+        console.error('Invalid webhook signature');
+        res.status(401).send('Unauthorized');
+        return;
+      }
+
+      // Signature is valid, immediately respond with 200 OK to prevent timeouts
       res.status(200).send('OK');
+
+      // Process webhook asynchronously after responding
+      setImmediate(async () => {
+        try {
+          await webhooks.receive({
+            id: req.headers['x-github-delivery'] as string,
+            name: req.headers['x-github-event'] as any,
+            payload: payload,
+          });
+        } catch (error) {
+          console.error('Webhook processing error:', error);
+          // Error handling will be logged and reported via Slack notifications
+        }
+      });
     } catch (error) {
-      console.error('Webhook error:', error);
+      console.error('Webhook verification error:', error);
       res.status(400).send('Bad Request');
     }
   }
