@@ -345,13 +345,16 @@ app.use(
       // Signature is valid, immediately respond with 200 OK to prevent timeouts
       res.status(200).send('OK');
 
+      // Parse the payload as JSON for the receive method
+      const parsedPayload = JSON.parse(payload);
+
       // Process webhook asynchronously after responding
       setImmediate(async () => {
         try {
           await webhooks.receive({
             id: req.headers['x-github-delivery'] as string,
             name: req.headers['x-github-event'] as any,
-            payload: payload,
+            payload: parsedPayload,
           });
         } catch (error) {
           console.error('Webhook processing error:', error);
