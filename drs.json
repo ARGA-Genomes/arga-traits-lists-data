@@ -2,6 +2,10 @@
   "prod": {},
   "test": {
     "Edible_species_list": "dr23166",
-    "Industry_and_commerce_list": "dr23169"
+    "Industry_and_commerce_list": "dr23169",
+    "crop_wild_relatives": "dr23173",
+    "bushfire_recovery": "dr23172",
+    "venomous_and_poisonous_species": "dr23174",
+    "significant_milestones": "dr23177"
   }
 }
