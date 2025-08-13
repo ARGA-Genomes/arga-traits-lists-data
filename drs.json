@@ -6,6 +6,12 @@
     "crop_wild_relatives": "dr23173",
     "bushfire_recovery": "dr23172",
     "venomous_and_poisonous_species": "dr23174",
-    "significant_milestones": "dr23177"
+    "significant_milestones": "dr23177",
+    "invasive_and_pest_species": "dr23197",
+    "migratory_species": "dr23193",
+    "native_species": "dr23205",
+    "threatened_species": "dr23195",
+    "useful_species": "dr23194",
+    "IUCN_red_list": "dr23206"
   }
 }
