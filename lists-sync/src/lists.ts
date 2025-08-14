@@ -1,3 +1,5 @@
+import JSZip from 'jszip';
+
 interface DrMap {
   prod: Record<string, string>;
   test: Record<string, string>;
@@ -112,30 +114,42 @@ async function getAccessToken(): Promise<string> {
  */
 function createMultipartFormData(
   boundary: string,
-  fields: Record<string, string>
-): string {
-  const parts: string[] = [];
+  fields: Record<string, string | Buffer>
+): Buffer {
+  const parts: Buffer[] = [];
+  const lineBreak = Buffer.from('\r\n');
+  const boundaryBuffer = Buffer.from(`--${boundary}`);
 
   for (const [name, value] of Object.entries(fields)) {
-    parts.push(`--${boundary}`);
-    if (name === 'file' && value.includes('\n')) {
-      // Handle file content with proper headers
-      const filename = `${Date.now()}.csv`;
+    parts.push(boundaryBuffer);
+    parts.push(lineBreak);
+
+    if (name === 'file' && Buffer.isBuffer(value)) {
+      // Handle ZIP file content with proper headers
+      const filename = `${Date.now()}.zip`;
       parts.push(
-        `Content-Disposition: form-data; name="file"; filename="${filename}"`
+        Buffer.from(
+          `Content-Disposition: form-data; name="file"; filename="${filename}"`
+        )
       );
-      parts.push('Content-Type: text/csv');
-    } else {
-      parts.push(`Content-Disposition: form-data; name="${name}"`);
+      parts.push(lineBreak);
+      parts.push(Buffer.from('Content-Type: application/zip'));
+      parts.push(lineBreak);
+      parts.push(lineBreak);
+      parts.push(value);
+    } else if (typeof value === 'string') {
+      parts.push(Buffer.from(`Content-Disposition: form-data; name="${name}"`));
+      parts.push(lineBreak);
+      parts.push(lineBreak);
+      parts.push(Buffer.from(value));
     }
-    parts.push('');
-    parts.push(value);
+    parts.push(lineBreak);
   }
 
-  parts.push(`--${boundary}--`);
-  parts.push('');
+  parts.push(Buffer.from(`--${boundary}--`));
+  parts.push(lineBreak);
 
-  return parts.join('\r\n');
+  return Buffer.concat(parts);
 }
 
 /**
@@ -143,6 +157,38 @@ function createMultipartFormData(
  */
 function generateBoundary(): string {
   return `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+}
+
+/**
+ * Creates a ZIP file in memory containing the CSV content
+ */
+async function createZipFromCsv(
+  csvContent: string,
+  filename: string = 'data.csv'
+): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file(filename, csvContent);
+
+  console.log(
+    `Creating ZIP archive with ${filename} (${csvContent.length} characters)`
+  );
+
+  const zipBuffer = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: {
+      level: 6, // Good balance between compression ratio and speed
+    },
+  });
+
+  console.log(
+    `ZIP created: ${zipBuffer.length} bytes (compression ratio: ${(
+      (1 - zipBuffer.length / csvContent.length) *
+      100
+    ).toFixed(1)}%)`
+  );
+
+  return zipBuffer;
 }
 
 /**
@@ -195,8 +241,12 @@ async function uploadFileContent(
     `Uploading file content for folder: ${parentFolderName} (${fileContent.length} characters)`
   );
 
+  // Create ZIP file in memory
+  const csvFilename = `${parentFolderName}_${Date.now()}.csv`;
+  const zipBuffer = await createZipFromCsv(fileContent, csvFilename);
+
   const formDataBody = createMultipartFormData(boundary, {
-    file: fileContent,
+    file: zipBuffer,
   });
 
   const accessToken = await getAccessToken();
@@ -220,11 +270,11 @@ async function uploadFileContent(
   const uploadData: UploadResponse = (await response.json()) as UploadResponse;
 
   if (uploadData.validationErrors && uploadData.validationErrors.length > 0) {
-    throw new Error(
-      `Upload validation errors:\n${uploadData.validationErrors
-        .map((error, index) => `${index + 1}. ${error}`)
-        .join('\n')}`
-    );
+    const detailedError = `Upload validation errors for ${parentFolderName}:\n${uploadData.validationErrors
+      .map((error, index) => `${index + 1}. ${error}`)
+      .join('\n')}\n\nThis typically means:\n- SOME_RECORDS_WITHOUT_SCIENTIFIC_NAME: Some rows have empty 'scientificName' field\n- Ensure all rows have valid scientific names in the first column`;
+    
+    throw new Error(detailedError);
   }
 
   console.log(

@@ -3,6 +3,7 @@ import { Webhooks } from '@octokit/webhooks';
 import slack from '@slack/bolt';
 import dotenv from 'dotenv';
 import express from 'express';
+import { gunzipSync } from 'zlib';
 
 import { reloadList } from './lists.js';
 
@@ -64,7 +65,9 @@ function isImportedFile(filename: string): boolean {
 // Helper function to check if a file is in imported_GoogleSheets subfolder
 function isImportedGoogleSheetsFile(filename: string): boolean {
   return (
-    filename.startsWith('imported_GoogleSheets/') && filename.includes('/')
+    filename.startsWith('imported_GoogleSheets/') &&
+    filename.includes('/') &&
+    (filename.endsWith('.csv') || filename.endsWith('.csv.gz'))
   );
 }
 
@@ -177,13 +180,21 @@ async function getFileContent(
 
     // Check if it's a file (not a directory)
     if ('content' in response.data && response.data.type === 'file') {
+      let content: string;
+
       // Check if content is available directly (small files)
       if (response.data.content && response.data.content.trim() !== '') {
         // Decode base64 content
-        const content = Buffer.from(response.data.content, 'base64').toString(
-          'utf8'
-        );
-        return content;
+        const buffer = Buffer.from(response.data.content, 'base64');
+
+        // Check if file is gzipped based on extension
+        if (path.endsWith('.csv.gz')) {
+          console.log(`Decompressing gzipped file: ${path}`);
+          const decompressed = gunzipSync(buffer);
+          content = decompressed.toString('utf8');
+        } else {
+          content = buffer.toString('utf8');
+        }
       }
       // For large files, GitHub provides a download_url instead
       else if (response.data.download_url) {
@@ -196,9 +207,20 @@ async function getFileContent(
             `Failed to download file: ${downloadResponse.status} ${downloadResponse.statusText}`
           );
         }
-        const content = await downloadResponse.text();
-        return content;
+
+        if (path.endsWith('.csv.gz')) {
+          console.log(`Decompressing large gzipped file: ${path}`);
+          const buffer = Buffer.from(await downloadResponse.arrayBuffer());
+          const decompressed = gunzipSync(buffer);
+          content = decompressed.toString('utf8');
+        } else {
+          content = await downloadResponse.text();
+        }
+      } else {
+        return null;
       }
+
+      return content;
     }
     return null;
   } catch (error) {
