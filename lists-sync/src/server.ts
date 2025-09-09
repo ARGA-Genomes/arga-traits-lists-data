@@ -1,19 +1,23 @@
-import { Octokit } from '@octokit/rest';
 import { Webhooks } from '@octokit/webhooks';
-import slack from '@slack/bolt';
 import dotenv from 'dotenv';
 import express from 'express';
-import { gunzipSync } from 'zlib';
 
+import {
+  DataResourceMap,
+  formatDrMapChanges,
+  getFileContent,
+  getParentFolderName,
+  isImportedGoogleSheetsFile,
+  loadDrMap,
+} from './github.js';
 import { reloadList } from './lists.js';
-
-const { App: SlackApp } = slack;
+import { receiver, sendSlackNotification } from './slack.js';
 
 // Load environment variables
 dotenv.config();
 
 // Initialize drMap variable
-let drMap: { prod: Record<string, string>; test: Record<string, string> } = {
+let drMap: DataResourceMap = {
   prod: {},
   test: {},
 };
@@ -43,205 +47,6 @@ for (const envVar of requiredEnvVars) {
 const webhooks = new Webhooks({
   secret: process.env.GITHUB_WEBHOOK_SECRET!,
 });
-
-// Initialize GitHub API client (optional token for higher rate limits)
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN, // Optional: add GITHUB_TOKEN to .env for higher rate limits
-});
-
-// Initialize Slack App
-const slackApp = new SlackApp({
-  token: process.env.SLACK_BOT_TOKEN,
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
-  socketMode: false,
-});
-
-// Helper function to check if a file is in an imported_ folder
-function isImportedFile(filename: string): boolean {
-  const pathSegments = filename.split('/');
-  return pathSegments.some((segment) => segment.startsWith('imported_'));
-}
-
-// Helper function to check if a file is in imported_GoogleSheets subfolder
-function isImportedGoogleSheetsFile(filename: string): boolean {
-  return (
-    filename.startsWith('imported_GoogleSheets/') &&
-    filename.includes('/') &&
-    (filename.endsWith('.csv') || filename.endsWith('.csv.gz'))
-  );
-}
-
-// Helper function to extract parent folder name from imported_GoogleSheets file path
-function getParentFolderName(filename: string): string | null {
-  if (!isImportedGoogleSheetsFile(filename)) return null;
-  const parts = filename.split('/');
-  if (parts.length >= 3 && parts[0] === 'imported_GoogleSheets') {
-    return parts[1]; // Return the subfolder name (e.g., "Edible_species_list")
-  }
-  return null;
-}
-
-// Helper function to load drs.json from GitHub
-async function loadDrMapFromGitHub(
-  owner: string,
-  repo: string,
-  ref?: string
-): Promise<void> {
-  try {
-    const content = await getFileContent(
-      owner,
-      repo,
-      'drs.json',
-      ref || 'HEAD'
-    );
-    if (!content) {
-      throw new Error('Failed to fetch drs.json content from GitHub');
-    }
-    const newDrMap = JSON.parse(content);
-    drMap = newDrMap;
-    console.log('Successfully loaded drs.json from GitHub:', drMap);
-  } catch (error) {
-    throw new Error(`Failed to load drs.json from GitHub: ${error}`);
-  }
-}
-
-// Helper function to compare drMaps and format changes for Slack
-function formatDrMapChanges(oldDrMap: any, newDrMap: any): string {
-  let message = '🔄 *DRS Configuration Updated*\n\n';
-
-  // Production changes
-  message += '🏭 *Production*\n';
-  const prodChanges = compareDrMapSection(
-    oldDrMap.prod || {},
-    newDrMap.prod || {}
-  );
-  if (prodChanges.length === 0) {
-    message += '• No changes\n';
-  } else {
-    message += prodChanges.join('\n') + '\n';
-  }
-
-  message += '\n🧪 *Testing*\n';
-  const testChanges = compareDrMapSection(
-    oldDrMap.test || {},
-    newDrMap.test || {}
-  );
-  if (testChanges.length === 0) {
-    message += '• No changes\n';
-  } else {
-    message += testChanges.join('\n') + '\n';
-  }
-
-  return message;
-}
-
-// Helper function to compare a section of drMap
-function compareDrMapSection(
-  oldSection: Record<string, string>,
-  newSection: Record<string, string>
-): string[] {
-  const changes: string[] = [];
-
-  // Check for additions and modifications
-  for (const [key, value] of Object.entries(newSection)) {
-    if (!(key in oldSection)) {
-      changes.push(`• Added: \`${key}\` → \`${value}\``);
-    } else if (oldSection[key] !== value) {
-      changes.push(
-        `• Changed: \`${key}\` → \`${oldSection[key]}\` to \`${value}\``
-      );
-    }
-  }
-
-  // Check for removals
-  for (const [key, value] of Object.entries(oldSection)) {
-    if (!(key in newSection)) {
-      changes.push(`• Removed: \`${key}\` (was \`${value}\`)`);
-    }
-  }
-
-  return changes;
-}
-
-// Helper function to fetch file content from GitHub
-async function getFileContent(
-  owner: string,
-  repo: string,
-  path: string,
-  ref: string
-): Promise<string | null> {
-  try {
-    const response = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path,
-      ref,
-    });
-
-    // Check if it's a file (not a directory)
-    if ('content' in response.data && response.data.type === 'file') {
-      let content: string;
-
-      // Check if content is available directly (small files)
-      if (response.data.content && response.data.content.trim() !== '') {
-        // Decode base64 content
-        const buffer = Buffer.from(response.data.content, 'base64');
-
-        // Check if file is gzipped based on extension
-        if (path.endsWith('.csv.gz')) {
-          console.log(`Decompressing gzipped file: ${path}`);
-          const decompressed = gunzipSync(buffer);
-          content = decompressed.toString('utf8');
-        } else {
-          content = buffer.toString('utf8');
-        }
-      }
-      // For large files, GitHub provides a download_url instead
-      else if (response.data.download_url) {
-        console.log(
-          `File too large for direct content, downloading from: ${response.data.download_url}`
-        );
-        const downloadResponse = await fetch(response.data.download_url);
-        if (!downloadResponse.ok) {
-          throw new Error(
-            `Failed to download file: ${downloadResponse.status} ${downloadResponse.statusText}`
-          );
-        }
-
-        if (path.endsWith('.csv.gz')) {
-          console.log(`Decompressing large gzipped file: ${path}`);
-          const buffer = Buffer.from(await downloadResponse.arrayBuffer());
-          const decompressed = gunzipSync(buffer);
-          content = decompressed.toString('utf8');
-        } else {
-          content = await downloadResponse.text();
-        }
-      } else {
-        return null;
-      }
-
-      return content;
-    }
-    return null;
-  } catch (error) {
-    console.error(`Failed to fetch content for ${path}:`, error);
-    return null;
-  }
-}
-
-// Helper function to send Slack notification
-async function sendSlackNotification(message: string) {
-  try {
-    await slackApp.client.chat.postMessage({
-      channel: process.env.SLACK_CHANNEL_ID!,
-      text: message,
-      mrkdwn: true,
-    });
-    console.log('Slack notification sent successfully');
-  } catch (error) {
-    console.error('Error sending Slack notification:', error);
-  }
-}
 
 // Handle push events (commits)
 webhooks.on('push', async ({ payload }) => {
@@ -278,11 +83,12 @@ webhooks.on('push', async ({ payload }) => {
   // Check if drs.json was modified
   const drJsonModified =
     allModified.includes('drs.json') || allAdded.includes('drs.json');
+
   if (drJsonModified) {
     console.log('drs.json was modified, updating drMap...');
     try {
       const oldDrMap = JSON.parse(JSON.stringify(drMap)); // Deep copy
-      await loadDrMapFromGitHub(owner, repo, commitSha);
+      drMap = await loadDrMap(owner, repo, commitSha);
 
       // Send Slack notification about drMap changes
       const changeMessage = formatDrMapChanges(oldDrMap, drMap);
@@ -390,6 +196,9 @@ app.use(
   }
 );
 
+// Slack events middleware
+app.use('/slack/events', receiver.router);
+
 // Error handling middleware
 app.use(
   (
@@ -411,7 +220,7 @@ async function startServer() {
     const defaultRepo = process.env.GITHUB_REPO!;
     const [owner, repo] = defaultRepo.split('/');
 
-    await loadDrMapFromGitHub(owner, repo);
+    drMap = await loadDrMap(owner, repo);
   } catch (error) {
     console.error('Failed to load initial drs.json:', error);
     console.error('Server cannot start without drs.json configuration');
@@ -421,6 +230,9 @@ async function startServer() {
   app.listen(port, () => {
     console.log(`🚀 ARGA Lists Sync server running on port ${port}`);
     console.log(`📡 Webhook endpoint: http://localhost:${port}/webhook`);
+    console.log(
+      `💬 Slack events endpoint: http://localhost:${port}/slack/events`
+    );
     console.log(`🏥 Health check: http://localhost:${port}/health`);
     console.log(`🔍 Monitoring files in 'imported_*' folders`);
     console.log(
