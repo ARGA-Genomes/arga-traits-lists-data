@@ -16,6 +16,7 @@ import {
   receiver,
   sendSlackNotification,
   setDrMap,
+  updateReloadMessage,
 } from './slack.js';
 
 // Load environment variables
@@ -91,21 +92,24 @@ webhooks.on('push', async ({ payload }) => {
 
   if (drJsonModified) {
     console.log('drs.json was modified, updating drMap...');
+    const updateBlocks = createMessageBlocks('DRs configuration updated');
+
     try {
       const oldDrMap = JSON.parse(JSON.stringify(drMap)); // Deep copy
       drMap = await loadDrMap(owner, repo, commitSha);
       setDrMap(drMap); // Update Slack module with new drMap
 
       // Send Slack notification about drMap changes
-      const changes = formatDrMapChanges(oldDrMap, drMap);
-
       await sendSlackNotification(
-        createMessageBlocks('DRs configuration updated', changes)()
+        updateBlocks(formatDrMapChanges(oldDrMap, drMap))
       );
     } catch (error) {
       console.error('Failed to update drMap after drs.json change:', error);
       await sendSlackNotification(
-        `❌ *Error updating DRS configuration*\n\nFailed to load updated drs.json: ${error}`
+        updateBlocks([
+          `❌  *Error updating DRS configuration*`,
+          `Failed to load updated drs.json: ${error}`,
+        ])
       );
     }
   }
@@ -120,6 +124,31 @@ webhooks.on('push', async ({ payload }) => {
     if (parentFolderName) {
       console.log(`Processing new file in imported_GoogleSheets: ${addedFile}`);
       const fileName = addedFile.split('/').pop();
+      const isListsTest = process.env.LISTS_API_ENDPOINT!.includes('.test');
+      const environment = isListsTest ? 'test' : 'prod';
+      const dataResourceUid =
+        drMap[isListsTest ? 'test' : 'prod'][parentFolderName];
+
+      if (!dataResourceUid) {
+        continue;
+      }
+
+      // Generate GitHub and ALA links
+      const gitHubLink = `https://github.com/${process.env
+        .GITHUB_REPO!}/tree/main/imported_GoogleSheets/${parentFolderName}`;
+      const alaLink = `https://lists${
+        environment === 'test' ? '.test' : ''
+      }.ala.org.au/list/${dataResourceUid}`;
+
+      // Send notification about added file
+      const updateBlocks = createMessageBlocks(
+        `List push: ${parentFolderName}`,
+        [`📁  Pushed file \`${fileName}\`, downloading and processing...`],
+        gitHubLink,
+        alaLink
+      );
+
+      const message = await sendSlackNotification(updateBlocks());
 
       try {
         const fileContent = await getFileContent(
@@ -131,20 +160,33 @@ webhooks.on('push', async ({ payload }) => {
 
         if (fileContent) {
           console.log(`Calling reloadList for folder: ${parentFolderName}`);
-          await reloadList(parentFolderName, fileContent, drMap);
-          await sendSlackNotification(
-            `✅ *List Reload Completed*\n\n• File: \`${fileName}\`\n• Folder: <https://github.com/${pushEvent.repository.full_name}/tree/main/imported_GoogleSheets/${parentFolderName}|${parentFolderName}>`
+          await updateReloadMessage(
+            message,
+            updateBlocks(`🚀  Starting list reload process...`)
+          );
+
+          await reloadList(parentFolderName, fileContent, dataResourceUid);
+
+          await updateReloadMessage(
+            message,
+            updateBlocks(`✅  List reload completed successfully!`)
           );
         } else {
           console.error(`Failed to fetch content for ${addedFile}`);
-          await sendSlackNotification(
-            `❌ *List Reload Failed*\n\nFailed to fetch content for: \`${fileName}\``
+          await updateReloadMessage(
+            message,
+            updateBlocks(
+              `❌  List reload failed for: *${parentFolderName}*\n\nFailed to fetch content for: \`${fileName}\``
+            )
           );
         }
       } catch (error) {
         console.error(`Failed to reload list for ${addedFile}:`, error);
-        await sendSlackNotification(
-          `❌ *List Reload Failed*\n\nError processing \`${fileName}\`: ${error}`
+        await updateReloadMessage(
+          message,
+          updateBlocks(
+            `❌  List reload failed for: *${parentFolderName}*\n\n*Error:* ${error}`
+          )
         );
       }
     }

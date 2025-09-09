@@ -85,7 +85,7 @@ export function createMessageBlocks(
   };
 }
 
-async function updateReloadMessage(
+export async function updateReloadMessage(
   message: slack.webApi.ChatPostMessageResponse,
   blocks: Blocks
 ) {
@@ -184,7 +184,7 @@ slackApp.command('/reload', async ({ command, ack, say }) => {
     );
 
     // Reload the list
-    await reloadList(listName, fileContent, drMap);
+    await reloadList(listName, fileContent, dataResourceUid);
 
     await updateReloadMessage(
       message,
@@ -227,21 +227,16 @@ slackApp.command('/clean', async ({ command, ack, say }) => {
 
 // Helper function to send Slack notification
 export async function sendSlackNotification(data: string | Blocks) {
-  try {
-    await slackApp.client.chat.postMessage(
-      typeof data === 'string'
-        ? {
-            channel: process.env.SLACK_CHANNEL_ID!,
-            text: data as string,
-            mrkdwn: true,
-          }
-        : {
-            channel: process.env.SLACK_CHANNEL_ID!,
-            blocks: data,
-          }
-    );
-    console.log('Slack notification sent successfully');
-  } catch (error) {
-    console.error('Error sending Slack notification:', error);
-  }
+  return await slackApp.client.chat.postMessage(
+    typeof data === 'string'
+      ? {
+          channel: process.env.SLACK_CHANNEL_ID!,
+          text: data as string,
+          mrkdwn: true,
+        }
+      : {
+          channel: process.env.SLACK_CHANNEL_ID!,
+          blocks: data,
+        }
+  );
 }
