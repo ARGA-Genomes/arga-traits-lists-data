@@ -98,7 +98,7 @@ export async function loadDrMap(
     }
     const newDrMap = JSON.parse(content);
 
-    console.log('Successfully loaded drs.json from GitHub:', newDrMap);
+    console.log('Successfully loaded drs.json from GitHub!');
     return newDrMap as DataResourceMap;
   } catch (error) {
     throw new Error(`Failed to load drs.json from GitHub: ${error}`);
@@ -109,33 +109,26 @@ export async function loadDrMap(
 export function formatDrMapChanges(
   oldDrMap: DataResourceMap,
   newDrMap: DataResourceMap
-): string {
-  let message = '🔄 *DRS Configuration Updated*\n\n';
-
-  // Production changes
-  message += '🏭 *Production*\n';
+): string[] {
+  // Delta changes
   const prodChanges = compareDrMapSection(
     oldDrMap.prod || {},
     newDrMap.prod || {}
   );
-  if (prodChanges.length === 0) {
-    message += '• No changes\n';
-  } else {
-    message += prodChanges.join('\n') + '\n';
-  }
-
-  message += '\n🧪 *Testing*\n';
   const testChanges = compareDrMapSection(
     oldDrMap.test || {},
     newDrMap.test || {}
   );
-  if (testChanges.length === 0) {
-    message += '• No changes\n';
-  } else {
-    message += testChanges.join('\n') + '\n';
-  }
 
-  return message;
+  const messages = [
+    '🏭  *Production*',
+    ...(prodChanges.length === 0 ? ['No changes'] : prodChanges),
+    '',
+    '🧪  *Testing*',
+    ...(testChanges.length === 0 ? ['No changes'] : testChanges),
+  ];
+
+  return messages;
 }
 
 // Helper function to check if a file is in imported_GoogleSheets subfolder
@@ -157,6 +150,56 @@ export function getParentFolderName(filename: string): string | null {
   return null;
 }
 
+// Helper function to find the latest file for a given list name
+export async function findLatestFileForList(
+  listName: string
+): Promise<{ name: string; path: string } | null> {
+  try {
+    const defaultRepo = process.env.GITHUB_REPO!;
+    const [owner, repo] = defaultRepo.split('/');
+
+    // Get contents of the list folder
+    const folderPath = `imported_GoogleSheets/${listName}`;
+    const response = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: folderPath,
+    });
+
+    if (!Array.isArray(response.data)) {
+      console.error(
+        `Expected directory listing for ${folderPath}, got single file`
+      );
+      return null;
+    }
+
+    // Filter for CSV files and sort by name (which should include timestamp)
+    const csvFiles = response.data
+      .filter(
+        (file) =>
+          file.type === 'file' &&
+          (file.name.endsWith('.csv') || file.name.endsWith('.csv.gz'))
+      )
+      .sort((a, b) => b.name.localeCompare(a.name)); // Sort descending to get latest first
+
+    if (csvFiles.length === 0) {
+      console.log(`No CSV files found in ${folderPath}`);
+      return null;
+    }
+
+    const latestFile = csvFiles[0];
+    console.log(`Found latest file for ${listName}: ${latestFile.name}`);
+
+    return {
+      name: latestFile.name,
+      path: latestFile.path,
+    };
+  } catch (error) {
+    console.error(`Failed to find latest file for ${listName}:`, error);
+    return null;
+  }
+}
+
 // Helper function to compare a section of drMap
 function compareDrMapSection(
   oldSection: Record<string, string>,
@@ -167,10 +210,10 @@ function compareDrMapSection(
   // Check for additions and modifications
   for (const [key, value] of Object.entries(newSection)) {
     if (!(key in oldSection)) {
-      changes.push(`• Added: \`${key}\` → \`${value}\``);
+      changes.push(`Added: \`${key}\` → \`${value}\``);
     } else if (oldSection[key] !== value) {
       changes.push(
-        `• Changed: \`${key}\` → \`${oldSection[key]}\` to \`${value}\``
+        `Changed: \`${key}\` → \`${oldSection[key]}\` to \`${value}\``
       );
     }
   }
@@ -178,7 +221,7 @@ function compareDrMapSection(
   // Check for removals
   for (const [key, value] of Object.entries(oldSection)) {
     if (!(key in newSection)) {
-      changes.push(`• Removed: \`${key}\` (was \`${value}\`)`);
+      changes.push(`Removed: \`${key}\` (was \`${value}\`)`);
     }
   }
 

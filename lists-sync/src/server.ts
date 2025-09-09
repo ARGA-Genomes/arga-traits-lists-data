@@ -11,7 +11,12 @@ import {
   loadDrMap,
 } from './github.js';
 import { reloadList } from './lists.js';
-import { receiver, sendSlackNotification } from './slack.js';
+import {
+  createMessageBlocks,
+  receiver,
+  sendSlackNotification,
+  setDrMap,
+} from './slack.js';
 
 // Load environment variables
 dotenv.config();
@@ -89,10 +94,14 @@ webhooks.on('push', async ({ payload }) => {
     try {
       const oldDrMap = JSON.parse(JSON.stringify(drMap)); // Deep copy
       drMap = await loadDrMap(owner, repo, commitSha);
+      setDrMap(drMap); // Update Slack module with new drMap
 
       // Send Slack notification about drMap changes
-      const changeMessage = formatDrMapChanges(oldDrMap, drMap);
-      await sendSlackNotification(changeMessage);
+      const changes = formatDrMapChanges(oldDrMap, drMap);
+
+      await sendSlackNotification(
+        createMessageBlocks('DRs configuration updated', changes)()
+      );
     } catch (error) {
       console.error('Failed to update drMap after drs.json change:', error);
       await sendSlackNotification(
@@ -197,7 +206,7 @@ app.use(
 );
 
 // Slack events middleware
-app.use('/slack/events', receiver.router);
+app.use(receiver.router);
 
 // Error handling middleware
 app.use(
@@ -221,6 +230,7 @@ async function startServer() {
     const [owner, repo] = defaultRepo.split('/');
 
     drMap = await loadDrMap(owner, repo);
+    setDrMap(drMap); // Initialize Slack module with drMap
   } catch (error) {
     console.error('Failed to load initial drs.json:', error);
     console.error('Server cannot start without drs.json configuration');
