@@ -45,7 +45,7 @@ interface CachedToken {
 
 // Configuration constants
 const PROGRESS_CHECK_INTERVAL = 5000; // 5 seconds
-const MAX_PROGRESS_ATTEMPTS = 120; // 10 minutes total
+const MAX_PROGRESS_ATTEMPTS = 500;
 const MAX_WAIT_TIME_SECONDS =
   MAX_PROGRESS_ATTEMPTS * (PROGRESS_CHECK_INTERVAL / 1000);
 
@@ -272,8 +272,10 @@ async function uploadFileContent(
   if (uploadData.validationErrors && uploadData.validationErrors.length > 0) {
     const detailedError = `Upload validation errors for ${parentFolderName}:\n${uploadData.validationErrors
       .map((error, index) => `${index + 1}. ${error}`)
-      .join('\n')}\n\nThis typically means:\n- SOME_RECORDS_WITHOUT_SCIENTIFIC_NAME: Some rows have empty 'scientificName' field\n- Ensure all rows have valid scientific names in the first column`;
-    
+      .join(
+        '\n'
+      )}\n\nThis typically means:\n- SOME_RECORDS_WITHOUT_SCIENTIFIC_NAME: Some rows have empty 'scientificName' field\n- Ensure all rows have valid scientific names in the first column`;
+
     throw new Error(detailedError);
   }
 
@@ -392,12 +394,12 @@ async function waitForIngestionCompletion(
  *
  * @param parentFolderName - The folder name that maps to a dataResourceUid in drMap
  * @param fileContent - The CSV file content to upload
- * @param drMap - The mapping of folder names to dataResourceUids
+ * @param dataResourceUid - The dataResourceUid of the list in the ALA Lists tool
  */
 export async function reloadList(
   parentFolderName: string,
   fileContent: string,
-  drMap: DrMap
+  dataResourceUid: string
 ): Promise<void> {
   const startTime = Date.now();
   console.log(`🚀 Starting reloadList for folder: ${parentFolderName}`);
@@ -406,18 +408,6 @@ export async function reloadList(
     // Step 0: Ensure we have a valid access token
     console.log('🔐 Acquiring access token...');
     await getAccessToken();
-
-    // Step 1: Get the dataResourceUid from drMap
-    const isListsTest = process.env.LISTS_API_ENDPOINT!.includes('.test');
-    const dataResourceUid =
-      drMap[isListsTest ? 'test' : 'prod'][parentFolderName];
-
-    if (!dataResourceUid) {
-      throw new Error(
-        `No dataResourceUid found for folder: ${parentFolderName}. ` +
-          `Available folders: ${Object.keys(drMap.test).join(', ')}`
-      );
-    }
 
     // Step 2: Fetch the species list internal ID
     const speciesListID = await fetchSpeciesListId(dataResourceUid);
